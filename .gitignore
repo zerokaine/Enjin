@@ -1,3 +1,6 @@
+# Build artifacts
+*.tsbuildinfo
+
 # Python
 __pycache__/
 *.py[cod]
