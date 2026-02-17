@@ -5,13 +5,13 @@
 #   1. New Resource → Docker Compose → point to this repo
 #   2. Set "Docker Compose file" to docker-compose.coolify.yml
 #   3. Assign domains in the Coolify UI:
-#        frontend → your domain        (port 3000)
-#        api      → your domain/api    (port 8000)
+#        frontend → enjin.tech         (port 3000)
+#        api      → api.enjin.tech     (port 8000)
 #   4. Set these environment variables in Coolify:
 #        NEO4J_PASSWORD     (required)
 #        POSTGRES_PASSWORD  (required)
 #        MEILI_MASTER_KEY   (required, min 16 chars)
-#        NEXT_PUBLIC_API_URL  e.g. https://yourdomain.com/api
+#        NEXT_PUBLIC_API_URL  https://api.enjin.tech
 # =============================================================================
 
 version: "3.9"
@@ -24,7 +24,7 @@ services:
       context: ./frontend
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://api.enjin.tech}
     depends_on:
       - api
     restart: unless-stopped
