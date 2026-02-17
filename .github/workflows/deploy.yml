@@ -1,13 +1,12 @@
 # =============================================================================
-# Enjin OSINT Platform - Deploy Pipeline
+# Enjin OSINT Platform — Deploy Pipeline (Coolify)
 # Triggered after the CI workflow completes successfully on main.
-# Deploys to production VPS via SSH.
 #
-# Required GitHub Secrets:
-#   VPS_HOST         - Server IP or hostname
-#   VPS_USER         - SSH user (e.g. enjin)
-#   VPS_SSH_KEY      - Private SSH key for authentication
-#   DEPLOY_DOMAIN    - Production domain (e.g. enjin.example.com)
+# Required GitHub Secrets (Settings → Environments → production):
+#   COOLIFY_WEBHOOK_URL   Full deploy webhook URL from Coolify
+#                         (Application → Webhooks → copy the URL)
+#   DEPLOY_DOMAIN         Your app's public domain: enjin.tech
+#                         Used only for the post-deploy health check.
 # =============================================================================
 name: Deploy
 
@@ -23,9 +22,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # ---------------------------------------------------------------------------
-  # Deploy to production
-  # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
@@ -34,93 +30,85 @@ jobs:
     environment: production
 
     steps:
+      # -----------------------------------------------------------------------
+      # 1. Fail fast with a clear message if secrets haven't been configured.
+      # -----------------------------------------------------------------------
       - name: Validate required secrets
         run: |
           missing=()
-          [ -z "${{ secrets.VPS_HOST }}"      ] && missing+=("VPS_HOST")
-          [ -z "${{ secrets.VPS_USER }}"      ] && missing+=("VPS_USER")
-          [ -z "${{ secrets.VPS_SSH_KEY }}"   ] && missing+=("VPS_SSH_KEY")
-          [ -z "${{ secrets.DEPLOY_DOMAIN }}" ] && missing+=("DEPLOY_DOMAIN")
+          [ -z "${{ secrets.COOLIFY_WEBHOOK_URL }}" ] && missing+=("COOLIFY_WEBHOOK_URL")
+          [ -z "${{ secrets.DEPLOY_DOMAIN }}"        ] && missing+=("DEPLOY_DOMAIN")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::The following required secrets are not set: ${missing[*]}"
-            echo "Add them under Settings → Secrets → Actions (repo level) and"
-            echo "Settings → Environments → production (environment level)."
+            echo "::error::Required secrets are not set: ${missing[*]}"
+            echo ""
+            echo "Add them under:"
+            echo "  GitHub → Settings → Environments → production → Environment secrets"
+            echo ""
+            echo "COOLIFY_WEBHOOK_URL: Coolify dashboard → Application → Webhooks tab"
+            echo "DEPLOY_DOMAIN:       enjin.tech (no https:// prefix)"
             exit 1
           fi
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up SSH key
+      # -----------------------------------------------------------------------
+      # 2. Ping Coolify's deploy webhook.
+      #    Coolify pulls the latest commit, rebuilds images, and does a
+      #    rolling restart — all managed on the Hetzner server.
+      # -----------------------------------------------------------------------
+      - name: Trigger Coolify deployment
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          # Populate known_hosts; tolerate transient scan failures so the
-          # step doesn't abort — the SSH/rsync commands will catch real errors.
-          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+          HTTP_CODE=$(curl -sSf \
+            -o /tmp/coolify_response.txt \
+            -w "%{http_code}" \
+            -X GET "${{ secrets.COOLIFY_WEBHOOK_URL }}")
 
-      - name: Sync project files to server
+          echo "Coolify response (HTTP $HTTP_CODE):"
+          cat /tmp/coolify_response.txt
+
+          if [[ "$HTTP_CODE" != "200" && "$HTTP_CODE" != "201" ]]; then
+            echo "::error::Coolify webhook returned HTTP $HTTP_CODE — check the URL in your secret."
+            exit 1
+          fi
+          echo "Deployment queued successfully."
+
+      # -----------------------------------------------------------------------
+      # 3. Give Coolify time to pull, build, and start all services.
+      #    Neo4j alone takes ~60 s to become healthy; total cold start ≈ 2 min.
+      # -----------------------------------------------------------------------
+      - name: Wait for Coolify to finish deploying
         run: |
-          rsync -avz --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '__pycache__' \
-            --exclude '*.egg-info' \
-            --exclude '.env' \
-            --exclude '.env.prod' \
-            --exclude 'backups/' \
-            -e "ssh -i ~/.ssh/deploy_key" \
-            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/enjin/
+          echo "Waiting 120 s for services to start…"
+          sleep 120
 
-      - name: Build and deploy on server
-        run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'DEPLOY_SCRIPT'
-          set -euo pipefail
-
-          cd /opt/enjin
-
-          echo "=== Building images ==="
-          docker compose -f docker-compose.prod.yml --env-file .env.prod build
-
-          echo "=== Starting services ==="
-          docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-
-          echo "=== Waiting for services to stabilize ==="
-          sleep 15
-
-          echo "=== Deployment complete ==="
-          docker compose -f docker-compose.prod.yml --env-file .env.prod ps
-          DEPLOY_SCRIPT
-
+      # -----------------------------------------------------------------------
+      # 4. Verify the API is responding before marking the run green.
+      #    15 retries × 20 s = up to 5 extra minutes if startup is slow.
+      # -----------------------------------------------------------------------
       - name: Health check
         run: |
-          echo "Running health check against https://${{ secrets.DEPLOY_DOMAIN }}/api/health"
-          RETRIES=10
-          STATUS=""
+          TARGET="https://${{ secrets.DEPLOY_DOMAIN }}/api/health"
+          echo "Health-checking $TARGET"
+          RETRIES=15
           while [ $RETRIES -gt 0 ]; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://${{ secrets.DEPLOY_DOMAIN }}/api/health" 2>/dev/null || echo "000")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$TARGET" 2>/dev/null || echo "000")
             if [ "$STATUS" = "200" ]; then
-              echo "Health check passed (HTTP 200)"
+              echo "Health check passed (HTTP 200) ✓"
               exit 0
             fi
-            echo "Health check returned HTTP $STATUS, retrying... ($RETRIES attempts left)"
+            echo "HTTP $STATUS — retrying in 20 s ($RETRIES attempts left)"
             RETRIES=$((RETRIES - 1))
-            sleep 10
+            sleep 20
           done
-          echo "Health check failed after all retries."
+          echo "::error::Health check failed after all retries. Check Coolify logs."
           exit 1
 
-      - name: Clean up SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
-
+      # -----------------------------------------------------------------------
+      # 5. Surface a helpful error message on failure.
+      # -----------------------------------------------------------------------
       - name: Notify on failure
         if: failure()
         run: |
           echo "::error::Deployment to ${{ secrets.DEPLOY_DOMAIN }} failed!"
-          echo "Check the deployment logs and server status."
-          echo "SSH into the server to investigate:"
-          echo "  ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
-          echo "  docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail=100"
+          echo ""
+          echo "Investigate via the Coolify dashboard:"
+          echo "  → Deployments tab: build output and container logs"
+          echo "  → Containers tab:  live container status"
