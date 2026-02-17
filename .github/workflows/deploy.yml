@@ -34,6 +34,20 @@ jobs:
     environment: production
 
     steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          [ -z "${{ secrets.VPS_HOST }}"      ] && missing+=("VPS_HOST")
+          [ -z "${{ secrets.VPS_USER }}"      ] && missing+=("VPS_USER")
+          [ -z "${{ secrets.VPS_SSH_KEY }}"   ] && missing+=("VPS_SSH_KEY")
+          [ -z "${{ secrets.DEPLOY_DOMAIN }}" ] && missing+=("DEPLOY_DOMAIN")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::The following required secrets are not set: ${missing[*]}"
+            echo "Add them under Settings → Secrets → Actions (repo level) and"
+            echo "Settings → Environments → production (environment level)."
+            exit 1
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -42,7 +56,9 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          # Populate known_hosts; tolerate transient scan failures so the
+          # step doesn't abort — the SSH/rsync commands will catch real errors.
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Sync project files to server
         run: |
