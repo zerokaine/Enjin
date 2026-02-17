@@ -7,9 +7,15 @@ from unittest.mock import patch
 from app.config import Settings, get_settings
 
 
-def _settings(**overrides) -> Settings:
-    """Create Settings without reading .env file, for test isolation."""
-    return Settings(_env_file=None, **overrides)
+def _settings(*, env: dict[str, str] | None = None, **overrides) -> Settings:
+    """Create Settings in a fully-isolated environment.
+
+    *env* sets the only env vars visible to Settings (default: none).
+    *overrides* are passed directly to the Settings constructor.
+    Using ``clear=True`` prevents ambient CI env vars from leaking in.
+    """
+    with patch.dict("os.environ", env or {}, clear=True):
+        return Settings(_env_file=None, **overrides)
 
 
 class TestSettingsDefaults:
@@ -70,35 +76,29 @@ class TestSettingsFromEnvironment:
     """Verify that environment variables override defaults."""
 
     def test_neo4j_uri_from_env(self) -> None:
-        with patch.dict("os.environ", {"NEO4J_URI": "bolt://custom:7687"}, clear=False):
-            s = _settings()
-            assert s.neo4j_uri == "bolt://custom:7687"
+        s = _settings(env={"NEO4J_URI": "bolt://custom:7687"})
+        assert s.neo4j_uri == "bolt://custom:7687"
 
     def test_postgres_port_from_env(self) -> None:
-        with patch.dict("os.environ", {"POSTGRES_PORT": "6543"}, clear=False):
-            s = _settings()
-            assert s.postgres_port == 6543
+        s = _settings(env={"POSTGRES_PORT": "6543"})
+        assert s.postgres_port == 6543
 
     def test_redis_url_from_env(self) -> None:
-        with patch.dict("os.environ", {"REDIS_URL": "redis://custom:6380/1"}, clear=False):
-            s = _settings()
-            assert s.redis_url == "redis://custom:6380/1"
+        s = _settings(env={"REDIS_URL": "redis://custom:6380/1"})
+        assert s.redis_url == "redis://custom:6380/1"
 
     def test_api_port_from_env(self) -> None:
-        with patch.dict("os.environ", {"API_PORT": "9000"}, clear=False):
-            s = _settings()
-            assert s.api_port == 9000
+        s = _settings(env={"API_PORT": "9000"})
+        assert s.api_port == 9000
 
     def test_meili_master_key_from_env(self) -> None:
-        with patch.dict("os.environ", {"MEILI_MASTER_KEY": "super_secret"}, clear=False):
-            s = _settings()
-            assert s.meili_master_key == "super_secret"
+        s = _settings(env={"MEILI_MASTER_KEY": "super_secret"})
+        assert s.meili_master_key == "super_secret"
 
     def test_case_insensitive_env_vars(self) -> None:
         """Pydantic Settings should handle case insensitively."""
-        with patch.dict("os.environ", {"neo4j_user": "custom_user"}, clear=False):
-            s = _settings()
-            assert s.neo4j_user == "custom_user"
+        s = _settings(env={"neo4j_user": "custom_user"})
+        assert s.neo4j_user == "custom_user"
 
 
 class TestGetSettings:
