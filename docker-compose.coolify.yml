@@ -1,213 +1,116 @@
 # =============================================================================
-# Enjin OSINT Platform — Coolify Deployment Compose
+# Enjin — Coolify deployment (builds on server, no registry needed)
 # =============================================================================
-# How to use
-# ----------
-# 1. In Coolify: New Resource → Docker Compose → point to this repo,
-#    set "Docker Compose file" to docker-compose.coolify.yml.
-# 2. Set all environment variables listed below in the Coolify UI
-#    (Resource → Environment Variables).
-# 3. Configure domains in the Coolify UI (Coolify handles Traefik automatically):
-#      frontend → https://enjin.tech          (port 3000)
-#      api      → https://enjin.tech/api      (port 8000, path-based)
-#    Do NOT configure domains for ingestion-worker, ingestion-beat,
-#    neo4j, postgres, redis, or meilisearch — they are internal only.
-# 4. Coolify manages SSL (Let's Encrypt) and zero-downtime redeploys.
-#
-# Images are pre-built by GitHub Actions and pushed to GHCR on every
-# successful merge to main. Coolify only needs to pull them — no build
-# step runs on the Hetzner server.
-#
-# Required environment variables (set in Coolify UI, NOT a file):
-#   NEO4J_PASSWORD        strong password for Neo4j
-#   POSTGRES_PASSWORD     strong password for Postgres
-#   MEILI_MASTER_KEY      strong key for Meilisearch (≥16 chars)
-#
-# Optional (sensible defaults provided):
-#   NEO4J_USER            (default: neo4j)
-#   POSTGRES_HOST         (default: postgres)
-#   POSTGRES_PORT         (default: 5432)
-#   POSTGRES_DB           (default: enjin)
-#   POSTGRES_USER         (default: enjin)
-#   REDIS_URL             (default: redis://redis:6379/0)
-#   MEILI_URL             (default: http://meilisearch:7700)
+# In Coolify:
+#   1. New Resource → Docker Compose → point to this repo
+#   2. Set "Docker Compose file" to docker-compose.coolify.yml
+#   3. Assign domains in the Coolify UI:
+#        frontend → your domain        (port 3000)
+#        api      → your domain/api    (port 8000)
+#   4. Set these environment variables in Coolify:
+#        NEO4J_PASSWORD     (required)
+#        POSTGRES_PASSWORD  (required)
+#        MEILI_MASTER_KEY   (required, min 16 chars)
+#        NEXT_PUBLIC_API_URL  e.g. https://yourdomain.com/api
 # =============================================================================
 
 version: "3.9"
 
-x-logging: &default-logging
-  driver: json-file
-  options:
-    max-size: "10m"
-    max-file: "3"
-
-# Shared env block for Python services (api, ingestion-worker, ingestion-beat)
-x-python-env: &python-env
-  NEO4J_URI:         ${NEO4J_URI:-bolt://neo4j:7687}
-  NEO4J_USER:        ${NEO4J_USER:-neo4j}
-  NEO4J_PASSWORD:    ${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in Coolify}
-  POSTGRES_HOST:     ${POSTGRES_HOST:-postgres}
-  POSTGRES_PORT:     ${POSTGRES_PORT:-5432}
-  POSTGRES_DB:       ${POSTGRES_DB:-enjin}
-  POSTGRES_USER:     ${POSTGRES_USER:-enjin}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in Coolify}
-  REDIS_URL:         ${REDIS_URL:-redis://redis:6379/0}
-  MEILI_URL:         ${MEILI_URL:-http://meilisearch:7700}
-  MEILI_MASTER_KEY:  ${MEILI_MASTER_KEY:?MEILI_MASTER_KEY must be set in Coolify}
-
 services:
-  # ---------------------------------------------------------------------------
-  # FastAPI backend — pre-built image from GHCR
-  # Coolify: set domain to https://enjin.tech/api (port 8000)
-  # ---------------------------------------------------------------------------
+
+  # ---- Frontend (Next.js) ---------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - internal
+
+  # ---- API (FastAPI) --------------------------------------------------------
   api:
-    image: ghcr.io/zerokaine/enjin-api:latest
+    build:
+      context: ./api
     command: >
       gunicorn app.main:app
-      -w 4
+      -w 2
       -k uvicorn.workers.UvicornWorker
       --bind 0.0.0.0:8000
       --timeout 120
-      --graceful-timeout 30
-      --access-logfile -
-      --error-logfile -
     environment:
-      <<: *python-env
+      NEO4J_URI:         bolt://neo4j:7687
+      NEO4J_USER:        ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD:    ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in Coolify}
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     5432
+      POSTGRES_DB:       ${POSTGRES_DB:-enjin}
+      POSTGRES_USER:     ${POSTGRES_USER:-enjin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Coolify}
+      REDIS_URL:         redis://redis:6379/0
+      MEILI_URL:         http://meilisearch:7700
+      MEILI_MASTER_KEY:  ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in Coolify}
     depends_on:
-      neo4j:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      neo4j:
+        condition: service_healthy
       meilisearch:
         condition: service_started
-    restart: always
-    mem_limit: 1g
-    logging: *default-logging
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 40s
     networks:
       - internal
 
-  # ---------------------------------------------------------------------------
-  # Next.js frontend — pre-built image from GHCR
-  # Coolify: set domain to https://enjin.tech (port 3000)
-  # ---------------------------------------------------------------------------
-  frontend:
-    image: ghcr.io/zerokaine/enjin-frontend:latest
+  # ---- Ingestion (Celery worker + beat in one process) ---------------------
+  ingestion:
+    build:
+      context: ./ingestion
+    command: celery -A app.main worker --loglevel=info --beat
     environment:
-      NODE_ENV: production
+      NEO4J_URI:         bolt://neo4j:7687
+      NEO4J_USER:        ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD:    ${NEO4J_PASSWORD:?set NEO4J_PASSWORD in Coolify}
+      POSTGRES_HOST:     postgres
+      POSTGRES_PORT:     5432
+      POSTGRES_DB:       ${POSTGRES_DB:-enjin}
+      POSTGRES_USER:     ${POSTGRES_USER:-enjin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Coolify}
+      REDIS_URL:         redis://redis:6379/0
+      MEILI_URL:         http://meilisearch:7700
+      MEILI_MASTER_KEY:  ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in Coolify}
     depends_on:
-      api:
-        condition: service_healthy
-    restart: always
-    mem_limit: 512m
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    networks:
-      - internal
-
-  # ---------------------------------------------------------------------------
-  # Celery worker — pre-built image from GHCR (same image as ingestion-beat)
-  # ---------------------------------------------------------------------------
-  ingestion-worker:
-    image: ghcr.io/zerokaine/enjin-ingestion:latest
-    command: celery -A app.main worker --loglevel=info --concurrency=2
-    environment:
-      <<: *python-env
-    depends_on:
-      neo4j:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: always
-    mem_limit: 1g
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A app.main inspect ping --timeout 10 | grep -q 'pong'"]
-      interval: 60s
-      timeout: 15s
-      retries: 3
-      start_period: 30s
-    networks:
-      - internal
-
-  # ---------------------------------------------------------------------------
-  # Celery beat — same image as ingestion-worker, different command
-  # ---------------------------------------------------------------------------
-  ingestion-beat:
-    image: ghcr.io/zerokaine/enjin-ingestion:latest
-    command: celery -A app.main beat --loglevel=info --schedule=/tmp/celerybeat-schedule
-    environment:
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-    depends_on:
-      redis:
+      neo4j:
         condition: service_healthy
-    restart: always
-    mem_limit: 256m
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD-SHELL", "test -f /tmp/celerybeat-schedule"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+    restart: unless-stopped
     networks:
       - internal
 
-  # ---------------------------------------------------------------------------
-  # Neo4j graph database
-  # ---------------------------------------------------------------------------
-  neo4j:
-    image: neo4j:5
-    environment:
-      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set in Coolify}"
-      NEO4J_server_memory_heap_initial__size: "512m"
-      NEO4J_server_memory_heap_max__size: "1g"
-      NEO4J_server_memory_pagecache_size: "256m"
-      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    restart: always
-    mem_limit: 2g
-    logging: *default-logging
-    healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u $${NEO4J_USER:-neo4j} -p $${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - internal
-
-  # ---------------------------------------------------------------------------
-  # PostgreSQL + PostGIS
-  # ---------------------------------------------------------------------------
+  # ---- PostgreSQL + PostGIS ------------------------------------------------
   postgres:
     image: postgis/postgis:16-3.4
     environment:
-      POSTGRES_DB:       "${POSTGRES_DB:-enjin}"
-      POSTGRES_USER:     "${POSTGRES_USER:-enjin}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in Coolify}"
+      POSTGRES_DB:       ${POSTGRES_DB:-enjin}
+      POSTGRES_USER:     ${POSTGRES_USER:-enjin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in Coolify}
     volumes:
       - pg_data:/var/lib/postgresql/data
       - ./data/schema/postgres_init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    restart: always
-    mem_limit: 1g
-    logging: *default-logging
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-enjin} -d ${POSTGRES_DB:-enjin}"]
       interval: 10s
@@ -217,40 +120,52 @@ services:
     networks:
       - internal
 
-  # ---------------------------------------------------------------------------
-  # Redis (persistence with AOF)
-  # ---------------------------------------------------------------------------
+  # ---- Neo4j ---------------------------------------------------------------
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?set NEO4J_PASSWORD in Coolify}"
+      NEO4J_server_memory_heap_initial__size: "512m"
+      NEO4J_server_memory_heap_max__size: "1g"
+      NEO4J_server_memory_pagecache_size: "256m"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - internal
+
+  # ---- Redis ---------------------------------------------------------------
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 384mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    restart: always
-    mem_limit: 512m
-    logging: *default-logging
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
     networks:
       - internal
 
-  # ---------------------------------------------------------------------------
-  # Meilisearch full-text search
-  # ---------------------------------------------------------------------------
+  # ---- Meilisearch ---------------------------------------------------------
   meilisearch:
     image: getmeili/meilisearch:v1.6
     environment:
-      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?MEILI_MASTER_KEY must be set in Coolify}"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?set MEILI_MASTER_KEY in Coolify}
       MEILI_ENV: production
       MEILI_NO_ANALYTICS: "true"
     volumes:
       - meili_data:/meili_data
-    restart: always
-    mem_limit: 1g
-    logging: *default-logging
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
       interval: 15s
@@ -260,22 +175,13 @@ services:
     networks:
       - internal
 
-# =============================================================================
-# Volumes — Coolify persists these automatically across redeploys
-# =============================================================================
 volumes:
+  pg_data:
   neo4j_data:
   neo4j_logs:
-  pg_data:
   redis_data:
   meili_data:
 
-# =============================================================================
-# Networks
-#   internal — private network for all service-to-service communication.
-#   Coolify automatically attaches api and frontend to its Traefik proxy
-#   network when you configure domains in the UI — no declaration needed here.
-# =============================================================================
 networks:
   internal:
     driver: bridge
