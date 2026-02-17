@@ -1,0 +1,51 @@
+# =============================================================================
+# Cross-platform line ending rules
+# =============================================================================
+
+# Default: auto-detect (normalise to LF in the repo, check out as OS-native)
+* text=auto
+
+# Shell scripts MUST stay LF — CRLF breaks bash/sh
+*.sh        text eol=lf
+*.bash      text eol=lf
+Dockerfile  text eol=lf
+Dockerfile* text eol=lf
+
+# Windows scripts stay CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# Config / data files — keep LF for consistency inside containers
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.toml      text eol=lf
+*.cfg       text eol=lf
+*.conf      text eol=lf
+*.sql       text eol=lf
+*.cypher    text eol=lf
+*.env*      text eol=lf
+
+# Source code — LF everywhere (matches formatter defaults)
+*.py        text eol=lf
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.md        text eol=lf
+
+# Binary files — never touch
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.eot       binary
+*.zip       binary
+*.tar.gz    binary

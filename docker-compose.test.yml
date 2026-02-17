@@ -1,0 +1,49 @@
+# =============================================================================
+# Enjin — Quick-test overlay
+#
+# Speeds up local testing by:
+#   • Replacing the production frontend build with `next dev` (hot-reload,
+#     no multi-stage compile step)
+#   • Moving the ingestion worker + beat to the optional "ingestion" profile
+#     so you can skip them when you only need the API and UI
+#
+# Usage:
+#   # Fast: just databases + API + frontend (hot-reload)
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up --build
+#
+#   # Full: include ingestion workers
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml \
+#     --profile ingestion up --build
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Frontend — override: skip the multi-stage build, use `next dev` instead
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      # Stop after the deps stage (npm ci only — no next build)
+      target: deps
+    command: npm run dev
+    # Mount the full source so hot-reload picks up every change
+    volumes:
+      - ./frontend:/app
+      # Keep the container's node_modules intact (don't let the host mount shadow it)
+      - /app/node_modules
+      - /app/.next
+    environment:
+      # Browser calls go to localhost:8000 (the exposed API port)
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+
+  # ---------------------------------------------------------------------------
+  # Ingestion — opt-in via `--profile ingestion`
+  # ---------------------------------------------------------------------------
+  ingestion:
+    profiles:
+      - ingestion
+
