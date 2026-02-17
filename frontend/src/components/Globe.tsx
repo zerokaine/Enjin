@@ -47,7 +47,6 @@ export default function Globe({
   onGlobeReady,
 }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const globeRef = useRef<any>(null)
   const frameRef = useRef<number>(0)
   const isInteracting = useRef(false)
