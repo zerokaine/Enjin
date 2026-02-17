@@ -78,6 +78,12 @@ services:
         condition: service_started
     env_file:
       - .env
+    # Override .env localhost values with Docker-internal service names
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      MEILI_URL: http://meilisearch:7700
     volumes:
       - ./api/app:/app/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -96,6 +102,12 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    # Override .env localhost values with Docker-internal service names
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      MEILI_URL: http://meilisearch:7700
     volumes:
       - ./ingestion/app:/app/app
     command: celery -A app.main worker --loglevel=info --beat
