@@ -22,8 +22,7 @@ pytestmark = pytest.mark.skipif(
     reason="en_core_web_sm model not installed",
 )
 
-from app.pipeline.extractor import EntityExtractor, ExtractedEntity
-
+from app.pipeline.extractor import EntityExtractor, ExtractedEntity  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Fixtures

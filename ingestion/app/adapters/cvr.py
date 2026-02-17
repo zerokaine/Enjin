@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -139,7 +139,7 @@ class CVRAdapter(SourceAdapter):
             return None
         for fmt in ("%d/%m - %Y", "%Y-%m-%d", "%d-%m-%Y"):
             try:
-                return datetime.strptime(str(date_str), fmt).replace(tzinfo=timezone.utc)
+                return datetime.strptime(str(date_str), fmt).replace(tzinfo=UTC)
             except ValueError:
                 continue
         return None

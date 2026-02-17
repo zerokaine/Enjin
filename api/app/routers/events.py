@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.sql import and_
 
 from app.db.postgres import Event, get_session

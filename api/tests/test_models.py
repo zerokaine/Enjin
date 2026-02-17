@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +21,6 @@ from app.models.events import (
     EventFeed,
     EventResponse,
 )
-
 
 # ========================================================================
 # Entity models
@@ -196,7 +195,9 @@ class TestEventCategory:
         actual = {c.value for c in EventCategory}
         assert actual == expected
 
-    @pytest.mark.parametrize("value", ["political", "economic", "social", "legal", "security", "technology"])
+    @pytest.mark.parametrize(
+        "value", ["political", "economic", "social", "legal", "security", "technology"]
+    )
     def test_valid_category(self, value: str) -> None:
         assert EventCategory(value).value == value
 
@@ -261,13 +262,13 @@ class TestEventResponse:
     """Tests for the EventResponse schema."""
 
     def test_serialization(self) -> None:
-        now = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
         resp = EventResponse(
             id="event-1",
             title="Test Event",
             summary="A summary",
             category="economic",
-            occurred_at=datetime(2025, 6, 15, 10, 30, tzinfo=timezone.utc),
+            occurred_at=datetime(2025, 6, 15, 10, 30, tzinfo=UTC),
             location_name="Geneva",
             latitude=46.2044,
             longitude=6.1432,
@@ -282,7 +283,7 @@ class TestEventResponse:
         assert len(data["connections"]) == 1
 
     def test_optional_fields_default_to_none(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         resp = EventResponse(id="ev1", title="Bare Event", created_at=now)
         assert resp.summary is None
         assert resp.category is None
@@ -298,7 +299,7 @@ class TestEventFeed:
     """Tests for the EventFeed paginated response."""
 
     def test_pagination_fields(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         events = [
             EventResponse(id=f"ev{i}", title=f"Event {i}", created_at=now)
             for i in range(3)
@@ -315,7 +316,7 @@ class TestEventFeed:
         assert feed.total == 0
 
     def test_serialization_roundtrip(self) -> None:
-        now = datetime.now(tz=timezone.utc)
+        now = datetime.now(tz=UTC)
         feed = EventFeed(
             events=[EventResponse(id="ev1", title="E", created_at=now)],
             total=1,

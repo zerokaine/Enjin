@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from typing import Any
 
@@ -116,7 +116,7 @@ class RSSAdapter(SourceAdapter):
                 try:
                     from time import mktime
 
-                    return datetime.fromtimestamp(mktime(struct), tz=timezone.utc)
+                    return datetime.fromtimestamp(mktime(struct), tz=UTC)
                 except (OverflowError, OSError, ValueError):
                     continue
 
@@ -125,7 +125,7 @@ class RSSAdapter(SourceAdapter):
             raw = entry.get(attr)
             if raw:
                 try:
-                    return parsedate_to_datetime(raw).replace(tzinfo=timezone.utc)
+                    return parsedate_to_datetime(raw).replace(tzinfo=UTC)
                 except (ValueError, TypeError):
                     continue
 

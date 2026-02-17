@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from tests.conftest import FakeGraphDB, FakeSearchClient
-
 
 pytestmark = pytest.mark.asyncio
 

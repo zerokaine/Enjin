@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from tests.conftest import FakeGraphDB
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -36,8 +34,8 @@ def _make_watcher_row(
     row.entity_type = entity_type
     row.notes = "Key person of interest"
     row.active = active
-    row.created_at = datetime(2025, 1, 1, 0, 0, tzinfo=timezone.utc)
-    row.updated_at = datetime(2025, 1, 2, 0, 0, tzinfo=timezone.utc)
+    row.created_at = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    row.updated_at = datetime(2025, 1, 2, 0, 0, tzinfo=UTC)
     return row
 
 
@@ -72,7 +70,12 @@ class TestListWatchers:
         self,
         async_client,
     ) -> None:
-        rows = [_make_watcher_row(), _make_watcher_row(watcher_id="22222222-3333-4444-5555-666666666666", entity_id="org-001")]
+        rows = [
+            _make_watcher_row(),
+            _make_watcher_row(
+                watcher_id="22222222-3333-4444-5555-666666666666", entity_id="org-001"
+            ),
+        ]
 
         with patch("app.routers.watchers.get_session") as mock_gs:
             mock_gs.return_value = _mock_session(rows=rows)
@@ -295,14 +298,17 @@ class TestGetWatcherActivity:
         # First execute call returns events, second returns relationships
         fake_graph_db.execute.side_effect = [
             # events
-            [{"event": {"id": "ev1", "title": "Summit", "occurred_at": "2025-06-15"}, "rel_type": "MENTIONS"}],
+            [{"event": {"id": "ev1", "title": "Summit", "occurred_at": "2025-06-15"},
+              "rel_type": "MENTIONS"}],
             # relationships
-            [{"node": {"id": "o1", "name": "Corp"}, "rel_type": "WORKS_FOR", "connected_at": "2025-06-10"}],
+            [{"node": {"id": "o1", "name": "Corp"},
+              "rel_type": "WORKS_FOR", "connected_at": "2025-06-10"}],
         ]
 
+        watcher_uuid = "11111111-2222-3333-4444-555555555555"
         with patch("app.routers.watchers.get_session") as mock_gs:
             mock_gs.return_value = _mock_session(single_row=watcher_row)
-            resp = await async_client.get("/watchers/11111111-2222-3333-4444-555555555555/activity")
+            resp = await async_client.get(f"/watchers/{watcher_uuid}/activity")
 
         assert resp.status_code == 200
         data = resp.json()
@@ -318,7 +324,9 @@ class TestGetWatcherActivity:
     ) -> None:
         with patch("app.routers.watchers.get_session") as mock_gs:
             mock_gs.return_value = _mock_session(single_row=None)
-            resp = await async_client.get("/watchers/00000000-0000-0000-0000-000000000000/activity")
+            resp = await async_client.get(
+                "/watchers/00000000-0000-0000-0000-000000000000/activity"
+            )
 
         assert resp.status_code == 404
 
@@ -350,10 +358,10 @@ class TestGetWatcherNetwork:
 
         with (
             patch("app.routers.watchers.get_session") as mock_gs,
-            patch("app.services.graph.GraphService") as MockSvc,
+            patch("app.services.graph.GraphService") as mock_svc,
         ):
             mock_gs.return_value = _mock_session(single_row=watcher_row)
-            instance = MockSvc.return_value
+            instance = mock_svc.return_value
             instance.get_entity_network = AsyncMock(return_value=mock_network)
 
             resp = await async_client.get("/watchers/11111111-2222-3333-4444-555555555555/network")
@@ -384,10 +392,10 @@ class TestGetWatcherNetwork:
 
         with (
             patch("app.routers.watchers.get_session") as mock_gs,
-            patch("app.services.graph.GraphService") as MockSvc,
+            patch("app.services.graph.GraphService") as mock_svc,
         ):
             mock_gs.return_value = _mock_session(single_row=watcher_row)
-            instance = MockSvc.return_value
+            instance = mock_svc.return_value
             instance.get_entity_network = AsyncMock(return_value={"nodes": [], "edges": []})
 
             resp = await async_client.get(

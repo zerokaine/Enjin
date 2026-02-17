@@ -7,15 +7,13 @@ that are reused across multiple test modules.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
 
 from app.adapters.base import RawItem
-
 
 # ---------------------------------------------------------------------------
 # RawItem fixtures
@@ -41,7 +39,7 @@ def full_raw_item() -> RawItem:
         content="This is the full article content with details.",
         summary="A brief summary of the article.",
         authors=["Alice Smith", "Bob Jones"],
-        published_at=datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc),
+        published_at=datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC),
         source_url="https://example.com/article/1",
         metadata={
             "feed_url": "https://example.com/feed.xml",
@@ -259,7 +257,11 @@ def mock_httpx_response():
         resp = httpx.Response(
             status_code=status_code,
             headers=headers or {},
-            content=json.dumps(json_data).encode() if json_data is not None else content or text.encode(),
+            content=(
+                json.dumps(json_data).encode()
+                if json_data is not None
+                else content or text.encode()
+            ),
             request=httpx.Request("GET", "https://mocked.example.com"),
         )
         return resp

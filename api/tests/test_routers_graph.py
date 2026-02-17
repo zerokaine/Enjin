@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from tests.conftest import FakeGraphDB
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -42,8 +40,8 @@ class TestGetConnections:
             ],
         }
 
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.find_shortest_path = AsyncMock(return_value=mock_path)
 
             resp = await async_client.get(
@@ -64,8 +62,8 @@ class TestGetConnections:
         async_client,
         fake_graph_db: FakeGraphDB,
     ) -> None:
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.find_shortest_path = AsyncMock(return_value=None)
 
             resp = await async_client.get(
@@ -81,8 +79,8 @@ class TestGetConnections:
         async_client,
         fake_graph_db: FakeGraphDB,
     ) -> None:
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.find_shortest_path = AsyncMock(return_value=None)
 
             resp = await async_client.get(
@@ -129,8 +127,8 @@ class TestGetRipple:
             "total_nodes": 2,
         }
 
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.get_ripple_trace = AsyncMock(return_value=mock_ripple)
 
             resp = await async_client.get("/graph/ripple/ev1")
@@ -146,8 +144,8 @@ class TestGetRipple:
         async_client,
         fake_graph_db: FakeGraphDB,
     ) -> None:
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.get_ripple_trace = AsyncMock(return_value=None)
 
             resp = await async_client.get("/graph/ripple/nonexistent")
@@ -160,11 +158,11 @@ class TestGetRipple:
         async_client,
         fake_graph_db: FakeGraphDB,
     ) -> None:
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.get_ripple_trace = AsyncMock(return_value=None)
 
-            resp = await async_client.get(
+            await async_client.get(
                 "/graph/ripple/ev1",
                 params={"max_hops": 5},
             )
@@ -196,8 +194,8 @@ class TestGetCluster:
             "total_events": 1,
         }
 
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.get_area_cluster = AsyncMock(return_value=mock_cluster)
 
             resp = await async_client.get(
@@ -219,8 +217,8 @@ class TestGetCluster:
         async_client,
         fake_graph_db: FakeGraphDB,
     ) -> None:
-        with patch("app.routers.graph.GraphService") as MockSvc:
-            instance = MockSvc.return_value
+        with patch("app.routers.graph.GraphService") as mock_svc:
+            instance = mock_svc.return_value
             instance.get_area_cluster = AsyncMock(
                 return_value={"entities": [], "events": [], "total_entities": 0, "total_events": 0}
             )

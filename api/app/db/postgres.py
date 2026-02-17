@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import AsyncGenerator
 
 from geoalchemy2 import Geometry
 from sqlalchemy import (
@@ -15,7 +14,6 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
-    Integer,
     String,
     Text,
     func,

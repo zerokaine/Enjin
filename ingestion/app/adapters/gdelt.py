@@ -14,8 +14,7 @@ import csv
 import hashlib
 import io
 import logging
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 import httpx
 
@@ -121,8 +120,7 @@ class GDELTAdapter(SourceAdapter):
     # ── network helpers ──────────────────────────────────────────────
     async def _get_latest_export_url(self, base_url: str) -> str | None:
         """Query the GDELT last-update endpoint to discover the latest CSV URL."""
-        url = f"{base_url}/doc/doc?query=*&mode=ArtList&format=csv&maxrecords=1"
-        # The simpler approach: use the well-known last-update file list
+        # Use the well-known last-update file list to discover the latest CSV
         last_update_url = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(last_update_url)
@@ -243,6 +241,6 @@ class GDELTAdapter(SourceAdapter):
         if not date_str or len(date_str) < 8:
             return None
         try:
-            return datetime.strptime(date_str[:8], "%Y%m%d").replace(tzinfo=timezone.utc)
+            return datetime.strptime(date_str[:8], "%Y%m%d").replace(tzinfo=UTC)
         except ValueError:
             return None

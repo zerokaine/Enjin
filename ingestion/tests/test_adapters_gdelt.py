@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,17 +17,9 @@ import pytest
 from app.adapters.base import RawItem
 from app.adapters.gdelt import (
     CAMEO_CATEGORY_MAP,
-    COL_ACTOR1_COUNTRY,
-    COL_ACTOR1_NAME,
-    COL_ACTOR2_COUNTRY,
-    COL_ACTOR2_NAME,
-    COL_EVENT_CODE,
-    COL_EVENT_ROOT_CODE,
     COL_GLOBAL_EVENT_ID,
-    COL_SOURCE_URL,
     GDELTAdapter,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -233,7 +225,7 @@ class TestRowToRawItem:
         row = _build_gdelt_row(date="20250601")
         item = adapter._row_to_raw_item(row)
         assert item is not None
-        assert item.published_at == datetime(2025, 6, 1, tzinfo=timezone.utc)
+        assert item.published_at == datetime(2025, 6, 1, tzinfo=UTC)
 
     def test_invalid_date_returns_none_published_at(self) -> None:
         adapter = GDELTAdapter({})
@@ -472,7 +464,7 @@ class TestGDELTHelpers:
 
     def test_parse_gdelt_date_valid(self) -> None:
         assert GDELTAdapter._parse_gdelt_date("20250115") == datetime(
-            2025, 1, 15, tzinfo=timezone.utc
+            2025, 1, 15, tzinfo=UTC
         )
 
     def test_parse_gdelt_date_empty(self) -> None:
