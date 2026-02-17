@@ -1,0 +1,271 @@
+version: "3.9"
+
+# =============================================================================
+# Enjin OSINT Platform - Production Docker Compose
+# Target: Single VPS (8-16GB RAM), Hetzner/DigitalOcean
+# =============================================================================
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Nginx reverse proxy - the only service exposed to the internet
+  # ---------------------------------------------------------------------------
+  nginx:
+    build:
+      context: ./deploy/nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: always
+    mem_limit: 256m
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - frontend
+
+  # ---------------------------------------------------------------------------
+  # FastAPI backend (Gunicorn + Uvicorn workers)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: ./api
+    command: >
+      gunicorn app.main:app
+      -w 4
+      -k uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --timeout 120
+      --graceful-timeout 30
+      --access-logfile -
+      --error-logfile -
+    env_file:
+      - .env.prod
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_started
+    restart: always
+    mem_limit: 1g
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - frontend
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # Next.js frontend (standalone build)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: /api
+    env_file:
+      - .env.prod
+    depends_on:
+      - api
+    restart: always
+    mem_limit: 512m
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - frontend
+
+  # ---------------------------------------------------------------------------
+  # Celery worker - processes ingestion tasks
+  # ---------------------------------------------------------------------------
+  ingestion-worker:
+    build:
+      context: ./ingestion
+    command: celery -A app.main worker --loglevel=info --concurrency=2
+    env_file:
+      - .env.prod
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+    mem_limit: 1g
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.main inspect ping --timeout 10 | grep -q 'pong'"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # Celery beat - periodic task scheduler
+  # ---------------------------------------------------------------------------
+  ingestion-beat:
+    build:
+      context: ./ingestion
+    command: celery -A app.main beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    env_file:
+      - .env.prod
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: always
+    mem_limit: 256m
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/celerybeat-schedule"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # Neo4j graph database
+  # ---------------------------------------------------------------------------
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: "${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:?NEO4J_PASSWORD must be set}"
+      NEO4J_server_memory_heap_initial__size: "512m"
+      NEO4J_server_memory_heap_max__size: "1g"
+      NEO4J_server_memory_pagecache_size: "256m"
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    restart: always
+    mem_limit: 2g
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u $${NEO4J_USER:-neo4j} -p $${NEO4J_PASSWORD} 'RETURN 1' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL with PostGIS
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-enjin}"
+      POSTGRES_USER: "${POSTGRES_USER:-enjin}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./data/schema/postgres_init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: always
+    mem_limit: 1g
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-enjin} -d ${POSTGRES_DB:-enjin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # Redis (persistence with AOF)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 384mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    restart: always
+    mem_limit: 512m
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+
+  # ---------------------------------------------------------------------------
+  # Meilisearch full-text search engine
+  # ---------------------------------------------------------------------------
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    environment:
+      MEILI_MASTER_KEY: "${MEILI_MASTER_KEY:?MEILI_MASTER_KEY must be set}"
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    restart: always
+    mem_limit: 1g
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - backend
+
+# =============================================================================
+# Named volumes for persistent data
+# =============================================================================
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  pg_data:
+  redis_data:
+  meili_data:
+  certbot_webroot:
+
+# =============================================================================
+# Networks: frontend (nginx-facing) and backend (internal services)
+# =============================================================================
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge

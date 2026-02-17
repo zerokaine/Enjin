@@ -1,0 +1,130 @@
+# =============================================================================
+# Enjin OSINT Platform - Deploy Pipeline
+# Triggered on push to main after CI passes.
+# Deploys to production VPS via SSH.
+#
+# Required GitHub Secrets:
+#   VPS_HOST         - Server IP or hostname
+#   VPS_USER         - SSH user (e.g. enjin)
+#   VPS_SSH_KEY      - Private SSH key for authentication
+#   DEPLOY_DOMAIN    - Production domain (e.g. enjin.example.com)
+# =============================================================================
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Only one deployment at a time
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Wait for CI to pass
+  # ---------------------------------------------------------------------------
+  ci-check:
+    name: Verify CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for CI workflow
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          check-name: "Test API"
+          wait-interval: 15
+
+      - name: Wait for frontend checks
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          check-name: "Test Frontend"
+          wait-interval: 15
+
+  # ---------------------------------------------------------------------------
+  # Deploy to production
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: ci-check
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync project files to server
+        run: |
+          rsync -avz --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '__pycache__' \
+            --exclude '*.egg-info' \
+            --exclude '.env' \
+            --exclude '.env.prod' \
+            --exclude 'backups/' \
+            -e "ssh -i ~/.ssh/deploy_key" \
+            ./ ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/enjin/
+
+      - name: Build and deploy on server
+        run: |
+          ssh -i ~/.ssh/deploy_key ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} << 'DEPLOY_SCRIPT'
+          set -euo pipefail
+
+          cd /opt/enjin
+
+          echo "=== Building images ==="
+          docker compose -f docker-compose.prod.yml --env-file .env.prod build
+
+          echo "=== Starting services ==="
+          docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+
+          echo "=== Waiting for services to stabilize ==="
+          sleep 15
+
+          echo "=== Deployment complete ==="
+          docker compose -f docker-compose.prod.yml --env-file .env.prod ps
+          DEPLOY_SCRIPT
+
+      - name: Health check
+        run: |
+          echo "Running health check against https://${{ secrets.DEPLOY_DOMAIN }}/api/health"
+          RETRIES=10
+          STATUS=""
+          while [ $RETRIES -gt 0 ]; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              "https://${{ secrets.DEPLOY_DOMAIN }}/api/health" 2>/dev/null || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed (HTTP 200)"
+              exit 0
+            fi
+            echo "Health check returned HTTP $STATUS, retrying... ($RETRIES attempts left)"
+            RETRIES=$((RETRIES - 1))
+            sleep 10
+          done
+          echo "Health check failed after all retries."
+          exit 1
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Deployment to ${{ secrets.DEPLOY_DOMAIN }} failed!"
+          echo "Check the deployment logs and server status."
+          echo "SSH into the server to investigate:"
+          echo "  ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}"
+          echo "  docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail=100"
