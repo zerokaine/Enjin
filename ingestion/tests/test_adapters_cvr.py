@@ -6,7 +6,7 @@ All HTTP calls to the CVR API are mocked.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,7 +15,6 @@ import pytest
 
 from app.adapters.base import RawItem
 from app.adapters.cvr import CVRAdapter
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -220,7 +219,7 @@ class TestCVRDateParsing:
         assert result.year == 1989
         assert result.month == 2
         assert result.day == 1
-        assert result.tzinfo == timezone.utc
+        assert result.tzinfo == UTC
 
     def test_iso_format(self) -> None:
         result = CVRAdapter._parse_date("2020-03-15")

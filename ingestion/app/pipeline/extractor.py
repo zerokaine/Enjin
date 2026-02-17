@@ -8,7 +8,7 @@ deduplication so the same entity name is not emitted twice.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import spacy
 from spacy.language import Language

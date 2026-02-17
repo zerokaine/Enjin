@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 import pytest
 
 from app.adapters.base import RawItem, SourceAdapter
-
 
 # =========================================================================
 # RawItem creation
@@ -39,7 +37,7 @@ class TestRawItemCreation:
         assert item.content == "This is the full article content with details."
         assert item.summary == "A brief summary of the article."
         assert item.authors == ["Alice Smith", "Bob Jones"]
-        assert item.published_at == datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
+        assert item.published_at == datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
         assert item.source_url == "https://example.com/article/1"
         assert "feed_url" in item.metadata
         assert "tags" in item.metadata
@@ -90,7 +88,7 @@ class TestRawItemToDict:
 
     def test_to_dict_published_at_isoformat(self) -> None:
         """published_at should be serialised to ISO 8601 when present."""
-        dt = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
         item = RawItem(source_adapter="s", external_id="e", title="t", published_at=dt)
         assert item.to_dict()["published_at"] == "2024-01-01T00:00:00+00:00"
 

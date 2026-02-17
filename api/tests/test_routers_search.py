@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
 from tests.conftest import FakeSearchClient
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -110,10 +107,8 @@ class TestUnifiedSearch:
         )
         assert resp.status_code == 200
 
-        # Verify the filter was passed to the search call for entities index
-        calls = fake_search_client.search.call_args_list
-        entity_call = [c for c in calls if c.kwargs.get("index") == "entities" or (c.args and len(c.args) > 1 and c.args[1] == "entities")]
         # At least the entities search should have been called
+        calls = fake_search_client.search.call_args_list
         assert len(calls) >= 1
 
     async def test_category_filter_for_events(

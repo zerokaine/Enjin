@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import AsyncMock
-
 import pytest
 
 from app.services.graph import GraphService
 from tests.conftest import FakeGraphDB
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -282,11 +278,17 @@ class TestGetAreaCluster:
     ) -> None:
         fake_graph_db.execute.return_value = [
             {
-                "node": {"id": "loc1", "name": "Office", "_labels": ["Location"], "latitude": 46.2, "longitude": 6.1},
+                "node": {
+                    "id": "loc1", "name": "Office",
+                    "_labels": ["Location"], "latitude": 46.2, "longitude": 6.1,
+                },
                 "dist_km": 5.2,
             },
             {
-                "node": {"id": "ev1", "title": "Protest", "_labels": ["Event"], "latitude": 46.3, "longitude": 6.2},
+                "node": {
+                    "id": "ev1", "title": "Protest",
+                    "_labels": ["Event"], "latitude": 46.3, "longitude": 6.2,
+                },
                 "dist_km": 12.3,
             },
         ]

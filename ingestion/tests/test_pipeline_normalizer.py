@@ -10,7 +10,6 @@ import pytest
 from app.pipeline.extractor import ExtractedEntity
 from app.pipeline.normalizer import EntityNormalizer, NormalisedEntity
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------

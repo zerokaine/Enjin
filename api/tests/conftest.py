@@ -7,9 +7,10 @@ that tests can run without any infrastructure.
 from __future__ import annotations
 
 import uuid
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any, AsyncGenerator
+from datetime import UTC, datetime
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -28,7 +29,9 @@ class FakeGraphDB:
         self.execute = AsyncMock(return_value=[])
         self.find_entity = AsyncMock(return_value=None)
         self.find_connections = AsyncMock(return_value=[])
-        self.create_entity = AsyncMock(return_value={"id": "new-entity", "name": "New", "type": "person"})
+        self.create_entity = AsyncMock(
+            return_value={"id": "new-entity", "name": "New", "type": "person"}
+        )
         self.create_relationship = AsyncMock(return_value={})
         self.search_entities = AsyncMock(return_value=[])
         self.connect = AsyncMock()
@@ -43,7 +46,9 @@ class FakeSearchClient:
 
     def __init__(self) -> None:
         self.client = MagicMock()
-        self.search = MagicMock(return_value={"hits": [], "estimatedTotalHits": 0, "processingTimeMs": 0})
+        self.search = MagicMock(
+            return_value={"hits": [], "estimatedTotalHits": 0, "processingTimeMs": 0}
+        )
         self.index_entity = MagicMock()
         self.index_entities = MagicMock()
         self.index_event = MagicMock()
@@ -180,13 +185,13 @@ def sample_event_row() -> MagicMock:
     row.title = "Trade Agreement Signed"
     row.summary = "Major trade agreement signed between nations."
     row.category = "economic"
-    row.occurred_at = datetime(2025, 6, 15, 10, 30, tzinfo=timezone.utc)
+    row.occurred_at = datetime(2025, 6, 15, 10, 30, tzinfo=UTC)
     row.location_name = "Geneva"
     row.latitude = 46.2044
     row.longitude = 6.1432
     row.source_url = "https://example.com/news/1"
-    row.created_at = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
-    row.updated_at = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
+    row.created_at = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
+    row.updated_at = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
     return row
 
 
@@ -200,8 +205,8 @@ def sample_watcher_row() -> MagicMock:
     row.entity_type = "person"
     row.notes = "Key person of interest"
     row.active = True
-    row.created_at = datetime(2025, 1, 1, 0, 0, tzinfo=timezone.utc)
-    row.updated_at = datetime(2025, 1, 2, 0, 0, tzinfo=timezone.utc)
+    row.created_at = datetime(2025, 1, 1, 0, 0, tzinfo=UTC)
+    row.updated_at = datetime(2025, 1, 2, 0, 0, tzinfo=UTC)
     return row
 
 

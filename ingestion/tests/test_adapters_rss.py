@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -15,7 +15,6 @@ import pytest
 
 from app.adapters.base import RawItem
 from app.adapters.rss import RSSAdapter
-
 
 # ---------------------------------------------------------------------------
 # Helper: build a fake feedparser entry

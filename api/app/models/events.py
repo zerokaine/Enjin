@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class EventCategory(str, Enum):
+class EventCategory(StrEnum):
     """Controlled vocabulary for event classification."""
 
     political = "political"

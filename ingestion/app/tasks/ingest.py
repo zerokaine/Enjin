@@ -12,20 +12,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from celery import chain as celery_chain
 from neo4j import GraphDatabase
 from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.adapters import ADAPTER_REGISTRY, get_adapter
 from app.adapters.base import RawItem
 from app.config import settings
 from app.main import celery_app
 from app.pipeline.extractor import EntityExtractor, ExtractedEntity
-from app.pipeline.geocoder import GeoResult, Geocoder
+from app.pipeline.geocoder import Geocoder, GeoResult
 from app.pipeline.normalizer import EntityNormalizer, NormalisedEntity
 
 logger = logging.getLogger(__name__)
@@ -231,7 +231,7 @@ def _store_entities_neo4j(
                         """,
                         name_a=name_a,
                         name_b=name_b,
-                        now=datetime.now(timezone.utc).isoformat(),
+                        now=datetime.now(UTC).isoformat(),
                     )
     finally:
         driver.close()
@@ -316,7 +316,7 @@ def fetch_source(
 
     except Exception as exc:
         logger.exception("fetch_source: adapter '%s' failed", adapter_name)
-        raise self.retry(exc=exc)
+        raise self.retry(exc=exc) from None
 
 
 @celery_app.task(

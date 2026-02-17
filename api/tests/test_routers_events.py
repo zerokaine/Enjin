@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from tests.conftest import FakeGraphDB, FakeSearchClient
-
 
 pytestmark = pytest.mark.asyncio
 
@@ -32,13 +30,13 @@ def _make_event_row(
     row.title = title
     row.summary = "Summary text"
     row.category = category
-    row.occurred_at = datetime(2025, 6, 15, 10, 30, tzinfo=timezone.utc)
+    row.occurred_at = datetime(2025, 6, 15, 10, 30, tzinfo=UTC)
     row.location_name = "Geneva"
     row.latitude = 46.2044
     row.longitude = 6.1432
     row.source_url = "https://example.com/news/1"
-    row.created_at = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
-    row.updated_at = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
+    row.created_at = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
+    row.updated_at = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
     row.metadata_ = {}
     row.geom = None
     return row
@@ -87,7 +85,10 @@ class TestListEvents:
         async_client,
         fake_graph_db: FakeGraphDB,
     ) -> None:
-        rows = [_make_event_row(), _make_event_row(event_id="11111111-2222-3333-4444-555555555555", title="Second")]
+        rows = [
+            _make_event_row(),
+            _make_event_row(event_id="11111111-2222-3333-4444-555555555555", title="Second"),
+        ]
 
         with patch("app.routers.events.get_session") as mock_gs:
             mock_gs.return_value = _mock_session(rows=rows, total=2)
@@ -228,11 +229,9 @@ class TestCreateEvent:
         async_client,
         fake_search_client: FakeSearchClient,
     ) -> None:
-        created_row = _make_event_row()
-
         async def _mock_refresh(obj):
             # Simulate refresh populating the created_at timestamp
-            obj.created_at = datetime(2025, 6, 15, 12, 0, tzinfo=timezone.utc)
+            obj.created_at = datetime(2025, 6, 15, 12, 0, tzinfo=UTC)
 
         @asynccontextmanager
         async def _session_ctx():

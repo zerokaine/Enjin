@@ -5,7 +5,6 @@ All HTTP calls are mocked.  No real network requests are made.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 from typing import Any
@@ -14,8 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.pipeline.geocoder import GeoResult, Geocoder
-
+from app.pipeline.geocoder import Geocoder, GeoResult
 
 # ---------------------------------------------------------------------------
 # Helpers
