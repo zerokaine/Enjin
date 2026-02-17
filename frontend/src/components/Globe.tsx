@@ -47,7 +47,8 @@ export default function Globe({
   onGlobeReady,
 }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const globeRef = useRef<ReturnType<typeof import('globe.gl')['default']> | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const globeRef = useRef<any>(null)
   const frameRef = useRef<number>(0)
   const isInteracting = useRef(false)
   const [isLoaded, setIsLoaded] = useState(false)
@@ -65,7 +66,7 @@ export default function Globe({
     const width = containerRef.current.clientWidth
     const height = containerRef.current.clientHeight
 
-    const globe = GlobeGL()(containerRef.current)
+    const globe = new GlobeGL(containerRef.current)
       .width(width)
       .height(height)
       .backgroundColor('rgba(0,0,0,0)')
