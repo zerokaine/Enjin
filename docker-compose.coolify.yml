@@ -7,11 +7,11 @@
 #    set "Docker Compose file" to docker-compose.coolify.yml.
 # 2. Set all environment variables listed below in the Coolify UI
 #    (Resource → Environment Variables).
-# 3. Configure domains:
-#      frontend → enjin.tech          (port 3000)
-#      api      → enjin.tech/api      (port 8000, path-based)
-#                 or api.enjin.tech   (subdomain)
-#    Coolify injects the Traefik labels automatically — no manual edits needed.
+# 3. Configure domains in the Coolify UI (Coolify handles Traefik automatically):
+#      frontend → https://enjin.tech          (port 3000)
+#      api      → https://enjin.tech/api      (port 8000, path-based)
+#    Do NOT configure domains for ingestion-worker, ingestion-beat,
+#    neo4j, postgres, redis, or meilisearch — they are internal only.
 # 4. Coolify manages SSL (Let's Encrypt) and zero-downtime redeploys.
 #
 # Required environment variables (set in Coolify UI, NOT a file):
@@ -89,12 +89,11 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - coolify   # Traefik routes external /api traffic here
       - internal
 
   # ---------------------------------------------------------------------------
   # Next.js frontend
-  # Coolify: set domain to your root domain (port 3000)
+  # Coolify: set domain to https://enjin.tech (port 3000)
   # ---------------------------------------------------------------------------
   frontend:
     build:
@@ -116,7 +115,6 @@ services:
       retries: 3
       start_period: 20s
     networks:
-      - coolify   # Traefik routes external traffic here
       - internal
 
   # ---------------------------------------------------------------------------
@@ -276,11 +274,10 @@ volumes:
 
 # =============================================================================
 # Networks
-#   coolify  — Coolify's shared Traefik proxy network (external, pre-created)
-#   internal — private network for service-to-service communication
+#   internal — private network for all service-to-service communication.
+#   Coolify automatically attaches api and frontend to its Traefik proxy
+#   network when you configure domains in the UI — no declaration needed here.
 # =============================================================================
 networks:
-  coolify:
-    external: true   # Created and managed by Coolify
   internal:
     driver: bridge
