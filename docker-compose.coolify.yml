@@ -8,8 +8,9 @@
 # 2. Set all environment variables listed below in the Coolify UI
 #    (Resource → Environment Variables).
 # 3. Configure domains:
-#      frontend → your root domain   (e.g. enjin.example.com)
-#      api      → same domain /api   (path-based) or api.enjin.example.com
+#      frontend → enjin.tech          (port 3000)
+#      api      → enjin.tech/api      (port 8000, path-based)
+#                 or api.enjin.tech   (subdomain)
 #    Coolify injects the Traefik labels automatically — no manual edits needed.
 # 4. Coolify manages SSL (Let's Encrypt) and zero-downtime redeploys.
 #

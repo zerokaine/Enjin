@@ -5,7 +5,7 @@
 # Required GitHub Secrets (Settings → Environments → production):
 #   COOLIFY_WEBHOOK_URL   Full deploy webhook URL from Coolify
 #                         (Application → Webhooks → copy the URL)
-#   DEPLOY_DOMAIN         Your app's public domain, e.g. enjin.example.com
+#   DEPLOY_DOMAIN         Your app's public domain: enjin.tech
 #                         Used only for the post-deploy health check.
 # =============================================================================
 name: Deploy
@@ -45,7 +45,7 @@ jobs:
             echo "  GitHub → Settings → Environments → production → Environment secrets"
             echo ""
             echo "COOLIFY_WEBHOOK_URL: Coolify dashboard → Application → Webhooks tab"
-            echo "DEPLOY_DOMAIN:       e.g. enjin.example.com (no https:// prefix)"
+            echo "DEPLOY_DOMAIN:       enjin.tech (no https:// prefix)"
             exit 1
           fi
 
