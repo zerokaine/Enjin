@@ -14,6 +14,10 @@
 #    neo4j, postgres, redis, or meilisearch — they are internal only.
 # 4. Coolify manages SSL (Let's Encrypt) and zero-downtime redeploys.
 #
+# Images are pre-built by GitHub Actions and pushed to GHCR on every
+# successful merge to main. Coolify only needs to pull them — no build
+# step runs on the Hetzner server.
+#
 # Required environment variables (set in Coolify UI, NOT a file):
 #   NEO4J_PASSWORD        strong password for Neo4j
 #   POSTGRES_PASSWORD     strong password for Postgres
@@ -53,12 +57,11 @@ x-python-env: &python-env
 
 services:
   # ---------------------------------------------------------------------------
-  # FastAPI backend (Gunicorn + Uvicorn)
-  # Coolify: set domain to /api path-prefix or api.<your-domain>
+  # FastAPI backend — pre-built image from GHCR
+  # Coolify: set domain to https://enjin.tech/api (port 8000)
   # ---------------------------------------------------------------------------
   api:
-    build:
-      context: ./api
+    image: ghcr.io/zerokaine/enjin-api:latest
     command: >
       gunicorn app.main:app
       -w 4
@@ -92,14 +95,11 @@ services:
       - internal
 
   # ---------------------------------------------------------------------------
-  # Next.js frontend
+  # Next.js frontend — pre-built image from GHCR
   # Coolify: set domain to https://enjin.tech (port 3000)
   # ---------------------------------------------------------------------------
   frontend:
-    build:
-      context: ./frontend
-      args:
-        NEXT_PUBLIC_API_URL: /api
+    image: ghcr.io/zerokaine/enjin-frontend:latest
     environment:
       NODE_ENV: production
     depends_on:
@@ -118,11 +118,10 @@ services:
       - internal
 
   # ---------------------------------------------------------------------------
-  # Celery worker — ingestion tasks
+  # Celery worker — pre-built image from GHCR (same image as ingestion-beat)
   # ---------------------------------------------------------------------------
   ingestion-worker:
-    build:
-      context: ./ingestion
+    image: ghcr.io/zerokaine/enjin-ingestion:latest
     command: celery -A app.main worker --loglevel=info --concurrency=2
     environment:
       <<: *python-env
@@ -146,11 +145,10 @@ services:
       - internal
 
   # ---------------------------------------------------------------------------
-  # Celery beat — periodic task scheduler
+  # Celery beat — same image as ingestion-worker, different command
   # ---------------------------------------------------------------------------
   ingestion-beat:
-    build:
-      context: ./ingestion
+    image: ghcr.io/zerokaine/enjin-ingestion:latest
     command: celery -A app.main beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
