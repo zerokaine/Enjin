@@ -1,0 +1,44 @@
+[
+  {
+    "adapter": "rss",
+    "name": "DR Nyheder (Denmark)",
+    "url": "https://www.dr.dk/nyheder/service/feeds/allenyheder",
+    "config": {"language": "da", "region": "DK"},
+    "schedule_cron": "*/15 * * * *"
+  },
+  {
+    "adapter": "rss",
+    "name": "Politiken",
+    "url": "https://politiken.dk/rss/senestenyt.rss",
+    "config": {"language": "da", "region": "DK"},
+    "schedule_cron": "*/15 * * * *"
+  },
+  {
+    "adapter": "rss",
+    "name": "Reuters World",
+    "url": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best",
+    "config": {"language": "en", "region": "INTL"},
+    "schedule_cron": "*/30 * * * *"
+  },
+  {
+    "adapter": "rss",
+    "name": "The Guardian World",
+    "url": "https://www.theguardian.com/world/rss",
+    "config": {"language": "en", "region": "INTL"},
+    "schedule_cron": "*/30 * * * *"
+  },
+  {
+    "adapter": "gdelt",
+    "name": "GDELT Event Stream",
+    "url": "http://data.gdeltproject.org/gdeltv2/lastupdate.txt",
+    "config": {"focus_countries": ["DA", "SW", "NO", "GM", "NL"]},
+    "schedule_cron": "*/15 * * * *"
+  },
+  {
+    "adapter": "cvr",
+    "name": "Danish Business Registry (CVR)",
+    "url": "https://datacvr.virk.dk/data/",
+    "config": {"region": "DK"},
+    "schedule_cron": "0 6 * * *"
+  }
+]
